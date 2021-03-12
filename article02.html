@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html style="font-size: 16px;">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="keywords" content="Workaround for handling formula field limitation in Salesforce">
+    <meta name="description" content="">
+    <meta name="page_type" content="np-template-header-footer-from-plugin">
+    <title>article02</title>
+    <link rel="stylesheet" href="nicepage.css" media="screen">
+<link rel="stylesheet" href="article02.css" media="screen">
+    <script class="u-script" type="text/javascript" src="jquery.js" defer=""></script>
+    <script class="u-script" type="text/javascript" src="nicepage.js" defer=""></script>
+    <meta name="generator" content="Nicepage 3.8.1, nicepage.com">
+    <link id="u-theme-google-font" rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:100,100i,300,300i,400,400i,500,500i,700,700i,900,900i|Open+Sans:300,300i,400,400i,600,600i,700,700i,800,800i">
+    
+    
+    <script type="application/ld+json">{
+		"@context": "http://schema.org",
+		"@type": "Organization",
+		"name": "",
+		"url": "index.html"
+}</script>
+    <meta property="og:title" content="article02">
+    <meta property="og:type" content="website">
+    <meta name="theme-color" content="#1f203a">
+    <link rel="canonical" href="index.html">
+    <meta property="og:url" content="index.html">
+  </head>
+  <body class="u-body">
+    <section class="u-clearfix u-section-1" id="sec-715a">
+      <div class="u-clearfix u-sheet u-sheet-1">
+        <h1 class="u-text u-text-custom-color-1 u-text-1">Query returning dual rows of AccountHistory object - use case on Workato</h1>
+        <a href="blog.html" data-page-id="88907028" class="u-btn u-button-style u-custom-color-1 u-hover-grey-60 u-btn-1">BACK TO BLOG</a>
+        <p class="u-text u-text-default-lg u-text-default-md u-text-default-sm u-text-default-xl u-text-2">#article02: 27 August, 2020<br>
+          <br><b>Account History:</b>&nbsp;Enabling the history tracking of fields is a smart move to know who has changed which field at what time. Basically, AccountHistory is an object that stores such details for the Account object. Its basically the changed field, its new value, old value, timestamps, etc. It is really helpful for the auditing team to cross verify whether updates to a record are done by the right hands.<br>
+          <br><b>SITUATION&nbsp;</b>
+          <br>Lets assume we have a client who uses Salesforce as their primary system of operation and is integrated with another database system, say SAP, as they just acquired a company that was using it. Going forward, I'll be referring Salesforce as SF. From the day of acquiring this company there is a regular sync job which updates the SAP User Id into SF User in a field called Imported Id. Now, lets consider the client is maintaining few Accounts of their customers in SAP which should be now added to SF and synced with the right owner.<br>
+          <br>Due to some technical error, the sync that was built previously is now broken and the accounts are misaligned from each other. The client is not worried about the minor details but insists that atleast the owners of those Accounts should be synced whose owners have been updated since -24 hours in SF.<br>
+          <br>&nbsp;<span style="font-weight: 700;">WORKATO MODELLING</span>
+          <br>Through workato, this is very much achievable. Lets first discuss the overall steps so you get an overview of what we are doing. Later I'll pickup the required step and explain the fix.<br>
+          <br>1. Check if you have authorized API connections for SF app and SAP app in Salesforce. If not available, consult your lead in getting them.<br>2. Create a trigger on the AccountHistory object in New/Update record format.<br>3. Include Account Id, ChangedField, Old Value, NewValue fields from AccountHistory object and set the record collection time for -24 hours.<br>4. Collect all account records in a list and store them in a list variable.<br>5. Use this variable to query the SAP app instance.<br>6. If the Owner field in SAP instance does not equate to the Owner's Imported Id field in SF instance, then we update the account in SAP with the right owner.<br>
+          <br>That was the jist. Now where is the problem?&nbsp;<br>
+          <br><b>FIX</b>
+          <br>The problem is at Step #3. When we query the AccountHistory object for changes, it always gives more than one row. The first row would have the owner's name and the second row would have the owner's Id. To filter this. include the code below in Workato such that you collect Account Ids in a String variable only...<br>
+          <br><b>IF</b>&nbsp;<b>NewValue DOESN'T CONTAIN '%005%'</b>
+          <br>
+          <br>Doing this will ensure that the String variable you use to collect the AccountIds will now consist of unique Ids, instead of duplicates. This will improve system performance and reduce exectution time as well.<br>
+          <br>So is the problem solved?<br>
+          <br>Not yet, there's a minor String formation thing that you need to take care of. If you have been coding in Java, you would know exactly what a subString() function does. Similarly in workato we make use of method called <b>slice(Index, length)</b>.<br>
+          <br>The final String variable will be of the form: <b>". firstId, secondId, thirdId, fourthId, fifthId"</b> To remove the first comma, use the below formula (considering strVar as the string data pill in workato)<br>
+          <br><b>strVar.slice(1, strVar.length)</b>
+          <br>
+          <br>Now that your string is set, use it directly to query the accounts in SF as well as SAP instances by placing it in the appropriate search queries for both the instances. Hope you liked the fix.<br>
+          <br>Enjoy!!<br>
+          <br><b>@rajacrmpro</b>
+        </p>
+        <a href="blog.html" data-page-id="88907028" class="u-btn u-button-style u-custom-color-1 u-hover-grey-60 u-btn-2">BACK TO BLOG</a>
+      </div>
+    </section>
+  </body>
+</html>

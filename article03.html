@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html style="font-size: 16px;">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="keywords" content="Workaround for handling formula field limitation in Salesforce">
+    <meta name="description" content="">
+    <meta name="page_type" content="np-template-header-footer-from-plugin">
+    <title>article03</title>
+    <link rel="stylesheet" href="nicepage.css" media="screen">
+<link rel="stylesheet" href="article03.css" media="screen">
+    <script class="u-script" type="text/javascript" src="jquery.js" defer=""></script>
+    <script class="u-script" type="text/javascript" src="nicepage.js" defer=""></script>
+    <meta name="generator" content="Nicepage 3.8.1, nicepage.com">
+    <link id="u-theme-google-font" rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:100,100i,300,300i,400,400i,500,500i,700,700i,900,900i|Open+Sans:300,300i,400,400i,600,600i,700,700i,800,800i">
+    
+    
+    <script type="application/ld+json">{
+		"@context": "http://schema.org",
+		"@type": "Organization",
+		"name": "",
+		"url": "index.html"
+}</script>
+    <meta property="og:title" content="article03">
+    <meta property="og:type" content="website">
+    <meta name="theme-color" content="#1f203a">
+    <link rel="canonical" href="index.html">
+    <meta property="og:url" content="index.html">
+  </head>
+  <body class="u-body">
+    <section class="u-clearfix u-section-1" id="sec-715a">
+      <div class="u-clearfix u-sheet u-sheet-1">
+        <h1 class="u-text u-text-custom-color-1 u-text-1">Using Apex collections to tackle Salesforce Governor Limits</h1>
+        <a href="blog.html" data-page-id="88907028" class="u-btn u-button-style u-custom-color-1 u-hover-grey-60 u-btn-1">BACK TO BLOG</a>
+        <p class="u-text u-text-default-lg u-text-default-md u-text-default-xl u-text-2">#article03: 12 December, 2020<br>
+          <br><b>Governor Limits:</b>&nbsp;Salesforce Governor Limits are usage caps enforced by Salesforce to ensure efficient processing. They allow for multiple users of the platform without impeding performance.<a href="https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_gov_limits.htm" class="u-active-none u-border-none u-btn u-button-style u-hover-none u-none u-text-palette-1-base u-btn-2">There are many different types of governor limits</a>, some of which are tied to your&nbsp;<a href="https://help.salesforce.com/articleView?id=overview_limits_general.htm&amp;type=5" class="u-active-none u-border-none u-btn u-button-style u-hover-none u-none u-text-palette-1-base u-btn-3">Salesforce edition</a>. Some limits are based on a combination of both your Salesforce edition but also the number of user licenses on the org. For example, API and data storage limits. Other governor limits are associated more with programming in Apex: for example, an Apex class / execute anon script can only have 100 SELECT statements per synchronous transaction.&nbsp;<br>
+          <br>For emerging developers, getting into standard Apex coding practices might be a little tricky, so here's a write-up on how to confront it.<br>
+          <br><b>SOLUTION&nbsp;</b>
+          <br>A common development trap is the assumption that an apex trigger affects only one record which invoked the trigger logic. In fact, Apex triggers are designed to handle records in bulk so we may get as many records entering the trigger’s logic as there are to cause the trigger event to fire. Triggers are assumed to handle bulk records which require developers to write logic that supports plans to accommodate operations in bulk otherwise referred as ‘bulkify’ the code. There is a limit of 100 SOQL queries and 150 DML operations for a given apex class which means that putting SOQL or DML inside any loop will cause the platform to reach the limits quickly.<br>
+          <br>I curated the following example from online which I referred to learn the concepts from 11conceps.&nbsp;<br>
+          <br>Merchandise__ c custom object stores a list of merchandise. It has the following field structure.<br>
+          <br><b>Condition__c, picklist<br>Price__c, currency(16,2)<br>StockOwner__c, lookup to User<br>Warehouse__c, master-detail to warehouse<br>Quantity__c, number(18,0)</b>
+          <br>
+          <br>Trigger requirement<br>StockOwnerEmail__c is the email field of the merchandise stock owner. It’s an optional field but whenever the field is supplied, we would like to populate his/her user id in StockOwner__c field – the lookup field to User standard object. The logic requires a before insert trigger.Inefficient way writing the trigger<br>
+          <br>An easier (but really an efficient and ugly) way will be to loop through the collection of the triggered records, run a SOQL to get the User sObject, and place the matching user id in StockOwner__c of the Merchandise__c object. The code will generate as many SOQL and DML operations as there are triggered records in Merchandise__c which could be 1 or 2 or even 200. Most likely, you will experience a run time exception limit error.<br><b>
+            <br>trigger updateStockOwner on Merchandise__c (before insert) {&nbsp;<br>for (Merchandise__c newMerchandiseRecord : Trigger.new) {&nbsp;<br>if (newMerchandiseRecord.StockOwnerEmail != null) {&nbsp;<br>//get matching User which has the same email&nbsp;<br>User stockOwnerUser = [SELECT Id FROM User WHERE Email = :newMerchandiseRecord.StockOwnerEmail LIMIT 1];&nbsp;<br>//place user id into merchandise record
+          newMerchandiseRecord.StockOwner__c = stockOwnerUser.Id;&nbsp;<br>}&nbsp;<br>}&nbsp;<br>}</b>
+          <br>
+          <br>A better and recommended way<br>An efficient way of achieving the goal, without impacting the governors limits, is to take SOQL (and DML if they were part of the logic such as in case of after insert or after update triggers) out of the loop. A typical way of achieving this is to:<br>1. Create a Set object to store emails, loop through the collection of triggered records, get emails and store in the Set object. No SOQL inside the loop.<br>2. Get a list of users with matching emails collected in step 1<br>3. Create a Map object to store a combination of emails (key) and user objects (value)<br>4. Loop through the collection of the triggered records to find the value (user) based on the key (email). No SOQL inside the loop.<br><b>
+            <br>trigger updateStockOwner on Merchandise__c (before insert) {&nbsp;<br>// 1. Define a Set object to get all emails found in the trigger collection&nbsp;<br>Set stockOwnerEmails = new Set();&nbsp;<br>for (Merchandise__c newMerchandiseRecord : Trigger.new) {&nbsp;<br>if (newMerchandiseRecord.StockOwnerEmail != null) {&nbsp;<br>// store stock owner’s email in set object for later use
+         stockOwnerEmails.add(newMerchandiseRecord.StockOwnerEmail);&nbsp;<br>}&nbsp;<br>}&nbsp;<br>// 2. Define a List object of users to store the matching users&nbsp;<br>List&lt;User&gt; matchedUsers = [Select Id, Email from User where Email in :stockOwnerEmails];&nbsp;<br>// 3. Define a Map object to store a key,value pair of emails and users&nbsp;<br>Map&lt;String, User&gt; mapForEmailsandUsers = new Map&lt;String, User&gt;;&nbsp;<br>for (Users usr : matchedUsers) {&nbsp;<br>// store emails and user objects for all the matched users
+      mapForEmailsandUsers.put(usr.Email,usr);&nbsp;<br>}&nbsp;<br>// 4. Loop thru trigger collection, match user from the map&nbsp;<br>for (Merchandise__c newMerchandiseRecord : Trigger.new)&nbsp;{&nbsp;<br>// get matching user from the map from step 3
+      User matchUsr = mapForEmailsandUsers.get(newMerchandiseRecord.StockOwnerEmail);&nbsp;<br>If (matchUsr != NULL) {
+         newMerchandiseRecord.StockOwner__c = matchUsr.Id;&nbsp;<br>}&nbsp;<br>}&nbsp;<br>}</b>
+          <br>
+          <br>Enjoy!!<br>
+          <br><b>@rajacrmpro</b>
+        </p>
+        <a href="blog.html" data-page-id="88907028" class="u-btn u-button-style u-custom-color-1 u-hover-grey-60 u-btn-4">BACK TO BLOG</a>
+      </div>
+    </section>
+  </body>
+</html>

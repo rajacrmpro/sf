@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html style="font-size: 16px;">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="keywords" content="Workaround for handling formula field limitation in Salesforce">
+    <meta name="description" content="">
+    <meta name="page_type" content="np-template-header-footer-from-plugin">
+    <title>article01</title>
+    <link rel="stylesheet" href="nicepage.css" media="screen">
+<link rel="stylesheet" href="article01.css" media="screen">
+    <script class="u-script" type="text/javascript" src="jquery.js" defer=""></script>
+    <script class="u-script" type="text/javascript" src="nicepage.js" defer=""></script>
+    <meta name="generator" content="Nicepage 3.8.1, nicepage.com">
+    <link id="u-theme-google-font" rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:100,100i,300,300i,400,400i,500,500i,700,700i,900,900i|Open+Sans:300,300i,400,400i,600,600i,700,700i,800,800i">
+    
+    
+    <script type="application/ld+json">{
+		"@context": "http://schema.org",
+		"@type": "Organization",
+		"name": "",
+		"url": "index.html"
+}</script>
+    <meta property="og:title" content="article01">
+    <meta property="og:type" content="website">
+    <meta name="theme-color" content="#1f203a">
+    <link rel="canonical" href="index.html">
+    <meta property="og:url" content="index.html">
+  </head>
+  <body class="u-body">
+    <section class="u-clearfix u-section-1" id="sec-8d30">
+      <div class="u-clearfix u-sheet u-sheet-1">
+        <h1 class="u-text u-text-custom-color-1 u-text-1">Workaround for handling formula field limitation in Salesforce</h1>
+        <a href="blog.html" data-page-id="88907028" class="u-btn u-button-style u-custom-color-1 u-hover-grey-60 u-btn-1">BACK TO BLOG</a>
+        <p class="u-text u-text-default-lg u-text-default-md u-text-default-sm u-text-default-xl u-text-2">#article01: 14 February, 2020<br>
+          <br><b>Formula Field:</b> It is a read-only field that derives its value from a formula expression you define. The formula field is updated when any of the source fields change. Sometimes we need to change the value based on the other source field value then we need a formula field.&nbsp;<br>
+          <br><b>SITUATION&nbsp;</b>
+          <br>Lets consider a scenario where users require mapping between locations and their zip codes. Rightly thought, if the locations are present in the form of a picklist, we could build a formula field with CASE type formula to return the appropriate zip code upon selecting its key value from the picklist. This looks like below:<br>
+          <br><b>CASE(Location__c,<br>"Agra",282001,<br>"Bombay",400001,<br>"Chennai",600028,<br>"Delhi",110001,<br>...<br>...<br>)</b>
+          <br>
+          <br>But what if you keep adding more and more cities to your system? Do you think formula field will be able to take the load? We also have to keep in mind that the character limitation of formula fields is only 3900.IS THIS THE RIGHT SHORTCUT?<br>A brilliant mind may think of creating a new formula field and linking it with the previous one like<br>
+          <br><b>CASE(Location__c,<br>"Agra",282001,<br>"Bombay",400001,<br>"Chennai",600028,<br>"Delhi",110001,<br>...<br>...<br>Location2__c<br>)</b>
+          <br>
+          <br>But this isn't the right way. I have tried this method and it doesn't work because eventually when two formula fields are linked with each other, they are treated as one within the Salesforce ecosystem, and their combined character limit is 3900, which is even worse.<br>
+          <br><b>SOLUTION</b>
+          <br>I thought of one alternative which is quite acceptable by most of the developers. There are many advanced developers who could find a better solution for this. Please choose whichever suits you best. Here goes my way.<br>1. First analyse your client's Salesforce setup and get to know the spots where locations play a role - for example, Agra and Delhi could be classified as 'North India' Region__c in some records. Similary, 'South India' for Chennai, and 'Central-West India' for Bombay, and so on.&nbsp;<br>2. Try to find the other classifications for the same location, like AvgTemperature__c, AvgRainfall__c, Population__c, etc. I'm just using random field values, solely for example, which could be scattered all over your instance data model.<br>3. Now create an object called Location and include Name, Zip Code, Temperature, Rainfall, Population, etc as fields into it. Remember to have an isActive checkbox. This comes handy to filter records in lookups and future deactivations, etc.<br>4. For the situation above, where we need to retrieve the Zip Code, lets consider we have an imaginary object called Voter__c and it has a formula field called Voter_ZipCode__c, which is currently facing limitation. Lets create another text field in this object named VoterZipBackup__c. And include this field at the end of your formula like below:<br>
+          <br><b>CASE(Location__c,<br>"Agra",282001,<br>"Bombay",400001,<br>"Chennai",600028,<br>"Delhi",110001,<br>...<br>...<br>VoterZipBackup__c<br>
+            <br>)</b>
+          <br>
+          <br>5. Now we need to edit the trigger/triggerHandler of Voter__c object where the create/update logic is present in the following way. Please format it and ignore typos for now.<br><b>
+            <br>public Map&lt;String, Location__c&gt; locationMap(List&lt;String&gt; locationNameList){<br>Set&lt;String&gt; locationNameSet= new Set&lt;String&gt;();<br>Map&lt;String, Location__c &gt; locationMap= new Map&lt;String, Location__c &gt;();<br>
+            <br>for(String location: locationNameList ){<br>locationNameSet .add(location);<br>}<br>
+            <br>if(locationNameSet !=null &amp;&amp; locationNameSet .size()&gt;0){<br>List&lt;Location__c&gt; locationList= [Select Id, Name, ZipCode__c from Location__c where Name IN :locationNameSet];<br>if(locationList!=null &amp;&amp; locationList.size()&gt;0){<br>for(Location__c loc: locationList){<br>if(loc.ZipCode__c!=null){<br>locationMap.put(loc.Name, loc.ZipCode__c);<br>}<br>}<br>}<br>}<br>
+            <br>if(locationMap!=null){<br>return locationMap;<br>}else<br>return null;<br>}<br>
+            <br>private void facilityManager(List&lt;Voter__c&gt; votersList, Map&lt;String, Facility__c&gt; locationMap){<br>if(locationMap!=null){<br>for(Voter__c v: votersList){<br>if(v.Location__c!=null &amp;&amp; locationMap.containsKey(v.Location__c)){<br>v.VoterZipBackup__c=locationMap.get(v).ZipCode__c ;&nbsp;<br>}<br>}<br>}<br>}&nbsp;</b>
+          <br>
+          <br>6. Doing so will help in populating the required zipcode into the backup field which in turn will be picked up by the formula field. This will ensure that the current setup is not broken, no front end changes are required, users need not be given knowledge article, and no requesting to Salesforce for increasing the limits. And guess what, now you have no limits in adding locations for your customer.<br>
+          <br>Enjoy!!<br>
+          <br><b>@rajacrmpro</b>
+        </p>
+        <a href="blog.html" data-page-id="88907028" class="u-btn u-button-style u-custom-color-1 u-hover-grey-60 u-btn-2">BACK TO BLOG</a>
+      </div>
+    </section>
+  </body>
+</html>
